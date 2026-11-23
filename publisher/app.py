@@ -57,11 +57,13 @@ class MavlinkSource:
         return self.conn.recv_match(type=WANTED_TYPES, blocking=True, timeout=timeout)
 
 
-def log_telemetry(s: Settings, state: TelemetryState, payload: dict, now: float, sent: bool) -> None:
+def log_telemetry(s: Settings, state: TelemetryState, payload: dict, now: float, sent: bool,
+                  connected: bool) -> None:
     """Console line per publish: raw MAVLink position received -> coordinates sent (LOG_TELEMETRY)."""
     if s.log_telemetry == "off":
         return
-    status = "SENT" if sent else "NOT SENT"
+    # QoS 1 while offline is queued, not sent: say so, so the log never claims a delivery that did not happen.
+    status = "NOT SENT" if not sent else "SENT" if connected else "QUEUED (MQTT offline)"
     log.info("RECV %s", describe_received(state, now, s.stale_after_s))
     def v(key, unit=""):
         x = payload[key]
@@ -144,7 +146,7 @@ def run(s: Settings, stop: threading.Event | None = None) -> None:
                     published_version = state.version
                     payload = build_payload(state, s.drone_id, now, s.stale_after_s, s.min_gps_fix)
                     sent = mqtt.publish(s.topic, payload)
-                    log_telemetry(s, state, payload, now, sent)
+                    log_telemetry(s, state, payload, now, sent, mqtt.connected.is_set())
 
             if now >= next_stats:
                 next_stats = now + STATS_EVERY_S

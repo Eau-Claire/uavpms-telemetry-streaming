@@ -98,3 +98,19 @@ local broker, and a WebSocket client sent 12 samples, including 3 without a GPS 
 > backend handled phone and drone telemetry in the same way. Values the phone cannot measure (battery, flight
 > mode, attitude, satellite count) were published as null rather than estimated. This setup validates
 > ingestion, transmission, storage and visualisation, but does not replace flight testing with an actual UAV.
+
+## Run on a server (Docker)
+
+Use this when the gateway must stay up without a laptop. It needs no Node install, only Docker.
+
+```bash
+cd deploy/vps
+cp .env.example .env && chmod 600 .env      # fill PHONE_ACCESS_TOKEN and MQTT_*
+docker compose up -d --build
+docker compose logs tunnel | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | tail -1   # current public URL
+docker compose logs -f gateway                                                          # SENT lines
+```
+
+The gateway is reachable only through the tunnel, plus `127.0.0.1:3100` on the server itself. History is kept
+in the `history` Docker volume. The Quick Tunnel URL changes whenever the `tunnel` container restarts, for
+example after a server reboot. Read it again from the logs when that happens.

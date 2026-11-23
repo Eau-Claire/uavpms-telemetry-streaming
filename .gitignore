@@ -6,3 +6,4 @@ certs/
 logs/
 node_modules/
 phone_gateway/data/
+deploy/vps/.env

@@ -1,0 +1,21 @@
+# Phone gateway + Cloudflare Quick Tunnel on a server. Run from this folder: docker compose up -d --build
+# The public HTTPS URL changes on every tunnel restart:  docker compose logs tunnel | grep trycloudflare
+name: uavpms-phone-gateway
+services:
+  gateway:
+    build: ../../phone_gateway
+    env_file: .env                     # PHONE_ACCESS_TOKEN, PHONE_DEVICE_ID, MQTT_*  (see .env.example)
+    environment:
+      PHONE_HTTP_HOST: 0.0.0.0         # inside the container network only
+    ports:
+      - "127.0.0.1:3100:3000"          # API/curl on the server itself; not exposed publicly
+    volumes:
+      - history:/app/data
+    restart: unless-stopped
+  tunnel:
+    image: cloudflare/cloudflared:2026.11.1
+    command: tunnel --no-autoupdate --url http://gateway:3000
+    depends_on: [gateway]
+    restart: unless-stopped
+volumes:
+  history:

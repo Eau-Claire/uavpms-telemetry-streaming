@@ -1,0 +1,18 @@
+[Unit]
+Description=UAV-PMS telemetry publisher (MAVLink -> MQTT)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/uavpms-telemetry-streaming
+ExecStart=/home/pi/uavpms-telemetry-streaming/.venv/bin/python -m publisher --env /home/pi/uavpms-telemetry-streaming/.env
+Restart=always
+RestartSec=5
+# Config errors exit with code 2: do not restart in a loop, fix .env and restart the service.
+RestartPreventExitStatus=2
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

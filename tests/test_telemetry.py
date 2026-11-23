@@ -112,6 +112,14 @@ class PayloadTests(unittest.TestCase):
         p = build_payload(s, "D1", 101.0, 5)
         self.assertFalse(p["armed"]); self.assertEqual(p["flight_mode"], "LOITER")
 
+    def test_unknown_generic_mode_is_null(self):
+        s = full_state()
+        generic = wire(M.MAVLink_heartbeat_message(M.MAV_TYPE_QUADROTOR, M.MAV_AUTOPILOT_GENERIC,
+                                                   M.MAV_MODE_FLAG_SAFETY_ARMED, 0, M.MAV_STATE_ACTIVE, 3))
+        s.update(generic, mono=100.0, wall=1.0)            # no custom mode -> pymavlink gives "Mode(0x80)"
+        p = build_payload(s, "D1", 101.0, 5)
+        self.assertIsNone(p["flight_mode"]); self.assertTrue(p["armed"])
+
     def test_empty_state_has_all_fields_null(self):
         p = build_payload(TelemetryState(), "D1", 1.0, 5)
         self.assertEqual(len(p), 22)

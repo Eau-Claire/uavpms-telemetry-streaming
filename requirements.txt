@@ -1,4 +1,5 @@
 pymavlink==2.4.50
 paho-mqtt==2.2.0
+pyserial==3.5
 certifi>=2024.2.2
 python-dotenv==1.1.1

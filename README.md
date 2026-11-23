@@ -13,7 +13,7 @@ and the autopilot heartbeat is alive.
 
 ## Setup
 
-Python 3.11+ (Windows, Linux or macOS).
+Python 3.11+ (Windows, Linux or macOS). To run on a Raspberry Pi on the drone, see [deploy/raspberry-pi](deploy/raspberry-pi/README.md).
 
 ```bash
 python -m venv .venv
@@ -96,7 +96,7 @@ vehicles on the same link. The publisher locks onto the first autopilot system i
 ## Testing
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -t .      # 16 unit tests, no network needed
+.venv/bin/python -m unittest discover -s tests -t .      # 17 unit tests, no network needed
 ```
 
 End-to-end without a drone. Run each command in its own terminal:

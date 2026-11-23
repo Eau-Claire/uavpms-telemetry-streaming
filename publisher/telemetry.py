@@ -114,7 +114,10 @@ def flight_mode(hb) -> str | None:
         mode = mavutil.mode_string_v10(hb)
     except Exception:
         return None
-    return mode or None
+    # Unknown custom modes (e.g. Betaflight's generic autopilot) come back as "Mode(0x...)": not a real name.
+    if not mode or mode.startswith("Mode("):
+        return None
+    return mode
 
 
 def build_payload(state: TelemetryState, drone_id: str, now_mono: float, stale_after_s: float,

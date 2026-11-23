@@ -187,3 +187,26 @@ def build_payload(state: TelemetryState, drone_id: str, now_mono: float, stale_a
     # Source timestamp: when the newest message in this payload was received from the autopilot.
     p["timestamp"] = _iso(max(e.wall for e in used)) if used else None
     return p
+
+
+def describe_received(state: TelemetryState, now_mono: float, stale_after_s: float) -> str:
+    """Raw MAVLink values behind the position, in their wire units, for the console log."""
+    parts = []
+    pos = state.entries.get("position")
+    if pos:
+        g = pos.msg
+        age = now_mono - pos.mono
+        parts.append(f"GLOBAL_POSITION_INT lat={g.lat} lon={g.lon} (deg*1e7) alt={g.alt}mm "
+                     f"relative_alt={g.relative_alt}mm hdg={g.hdg}cdeg age={age:.1f}s"
+                     + (" STALE" if age > stale_after_s else ""))
+    else:
+        parts.append("GLOBAL_POSITION_INT none")
+    gps = state.entries.get("gps")
+    if gps:
+        g = gps.msg
+        age = now_mono - gps.mono
+        parts.append(f"GPS_RAW_INT fix={g.fix_type} sats={g.satellites_visible} eph={g.eph} age={age:.1f}s"
+                     + (" STALE" if age > stale_after_s else ""))
+    else:
+        parts.append("GPS_RAW_INT none")
+    return f"sys={state.system_id} " + " | ".join(parts)

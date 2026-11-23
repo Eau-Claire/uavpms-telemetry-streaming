@@ -40,7 +40,17 @@ Other sources: `tcp:127.0.0.1:5762` (SITL), or a serial port (`COM3`, `/dev/ttyU
 .venv/bin/python -m publisher            # uses .env; Ctrl+C to stop
 ```
 
-The log shows the MQTT connection, the autopilot heartbeat, link loss and a stats line every 60 s
+Every publish prints the raw MAVLink position received and the coordinates sent (`LOG_TELEMETRY=coords`,
+the default; `full` also prints the JSON payload, `off` turns it off):
+
+```
+RECV sys=1 GLOBAL_POSITION_INT lat=107770362 lon=1067055550 (deg*1e7) alt=50000mm relative_alt=40000mm hdg=9576cdeg age=0.1s | GPS_RAW_INT fix=3 sats=14 eph=80 age=0.1s
+SENT drone/UAV-HCM-01/telemetry lat=10.7770362 lon=106.705555 alt_rel=40.0m alt_msl=50.0m fix=3 sats=14 mode=AUTO armed=True bat=99%
+RECV sys=1 GLOBAL_POSITION_INT lat=0 lon=0 (deg*1e7) alt=50000mm relative_alt=40000mm hdg=10725cdeg age=0.1s | GPS_RAW_INT fix=1 sats=0 eph=65535 age=0.1s
+SENT drone/UAV-HCM-01/telemetry lat=null lon=null alt_rel=40.0m alt_msl=null fix=1 sats=0 mode=AUTO armed=True bat=99%
+```
+
+The log also shows the MQTT connection, the autopilot heartbeat, link loss and a stats line every 60 s
 (`published`, `acked`, `queue_full`, `skipped_no_data`, `skipped_link_lost`). The password is never logged.
 
 ## Payload

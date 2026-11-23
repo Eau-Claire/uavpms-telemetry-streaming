@@ -64,6 +64,7 @@ class Settings:
     heartbeat_timeout_s: float
     min_gps_fix: int
     log_level: str
+    log_telemetry: str
 
     @property
     def topic(self) -> str:
@@ -97,6 +98,9 @@ def load_settings(env_file: str | None = ".env") -> Settings:
         raise ConfigError(f"MQTT_CA_CERT file not found: {ca}")
     stale = _num("STALE_AFTER_S", 5.0, float, 0.5, 300)
     interval = _num("PUBLISH_INTERVAL_S", 2.0, float, 0.2, 60)
+    log_telemetry = (_str("LOG_TELEMETRY", "coords") or "coords").lower()
+    if log_telemetry not in ("coords", "full", "off"):
+        raise ConfigError(f"LOG_TELEMETRY must be coords, full or off, got {log_telemetry!r}")
 
     return Settings(
         drone_id=drone_id,
@@ -120,4 +124,5 @@ def load_settings(env_file: str | None = ".env") -> Settings:
         heartbeat_timeout_s=_num("HEARTBEAT_TIMEOUT_S", 5.0, float, 1, 300),
         min_gps_fix=_num("MIN_GPS_FIX", 3, int, 2, 6),
         log_level=_str("LOG_LEVEL", "INFO").upper() or "INFO",
+        log_telemetry=log_telemetry,
     )

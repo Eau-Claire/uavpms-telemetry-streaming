@@ -1,6 +1,7 @@
 """Main loop: read MAVLink, publish one telemetry message every PUBLISH_INTERVAL_S when there is fresh data."""
 from __future__ import annotations
 
+import json
 import logging
 import signal
 import threading
@@ -10,7 +11,7 @@ from pymavlink import mavutil
 
 from .config import Settings
 from .mqtt_client import MqttPublisher
-from .telemetry import WANTED_TYPES, TelemetryState, build_payload
+from .telemetry import WANTED_TYPES, TelemetryState, build_payload, describe_received
 
 log = logging.getLogger("publisher")
 
@@ -54,6 +55,22 @@ class MavlinkSource:
 
     def recv(self, timeout: float):
         return self.conn.recv_match(type=WANTED_TYPES, blocking=True, timeout=timeout)
+
+
+def log_telemetry(s: Settings, state: TelemetryState, payload: dict, now: float, sent: bool) -> None:
+    """Console line per publish: raw MAVLink position received -> coordinates sent (LOG_TELEMETRY)."""
+    if s.log_telemetry == "off":
+        return
+    status = "SENT" if sent else "NOT SENT"
+    log.info("RECV %s", describe_received(state, now, s.stale_after_s))
+    def v(key, unit=""):
+        x = payload[key]
+        return "null" if x is None else f"{x}{unit}"
+    log.info("%s %s lat=%s lon=%s alt_rel=%s alt_msl=%s fix=%s sats=%s mode=%s armed=%s bat=%s",
+             status, s.topic, v("lat"), v("lon"), v("alt_relative_m", "m"), v("alt_msl_m", "m"),
+             v("gps_fix_type"), v("satellites"), v("flight_mode"), v("armed"), v("battery_remaining_pct", "%"))
+    if s.log_telemetry == "full":
+        log.info("JSON %s", json.dumps(payload, ensure_ascii=False))
 
 
 def run(s: Settings, stop: threading.Event | None = None) -> None:
@@ -126,8 +143,8 @@ def run(s: Settings, stop: threading.Event | None = None) -> None:
                 else:
                     published_version = state.version
                     payload = build_payload(state, s.drone_id, now, s.stale_after_s, s.min_gps_fix)
-                    if mqtt.publish(s.topic, payload):
-                        log.debug("published %s", payload)
+                    sent = mqtt.publish(s.topic, payload)
+                    log_telemetry(s, state, payload, now, sent)
 
             if now >= next_stats:
                 next_stats = now + STATS_EVERY_S

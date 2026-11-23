@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 certs/
 logs/
+node_modules/
+phone_gateway/data/

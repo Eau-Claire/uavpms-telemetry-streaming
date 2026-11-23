@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAV-PMS Telemetry Monitor</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#14181f; --muted:#5b6472; --line:#e3e6eb; --ok:#13804b; --warn:#a15c00; --bad:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#181c22; --fg:#e8ebf0; --muted:#98a1ae; --line:#2a3038; --ok:#3fbf7f; --warn:#e0a443; --bad:#f06b5f; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:17px; margin:0 12px 0 0; }
+  .badge { font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; border:1px solid currentColor; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+  .wrap { display:grid; grid-template-columns: 1fr 360px; gap:12px; padding:12px 16px; height: calc(100vh - 58px); }
+  #map { border-radius:12px; border:1px solid var(--line); min-height: 320px; }
+  aside { overflow:auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:12px; }
+  .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:2px 0 6px; }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:4px 0; font-size:14px; border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:0; }
+  .row span:first-child { color:var(--muted); }
+  .row span:last-child { font-variant-numeric: tabular-nums; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; height:auto; } #map { height: 55vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Telemetry Monitor · <span id="dev">—</span></h1>
+  <span id="online" class="badge bad">Offline</span>
+  <span id="fix" class="badge muted">GPS —</span>
+  <span id="link" class="badge warn">Đang kết nối</span>
+  <span class="muted" style="font-size:13px">Cập nhật: <span id="updated">—</span></span>
+</header>
+<div class="wrap">
+  <div id="map"></div>
+  <aside>
+    <div class="card"><h2>Contract (MQTT <span id="topic"></span>)</h2><div id="contract"></div></div>
+    <div class="card"><h2>Cảm biến thô (1 Hz)</h2><div id="raw"></div></div>
+    <div class="card"><h2>Gateway</h2><div id="gw"></div></div>
+  </aside>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const token = new URLSearchParams(location.search).get("token") || "";
+  const f = (v, d = 2, unit = "") => (v === null || v === undefined ? "—" : (typeof v === "number" ? v.toFixed(d) : String(v)) + unit);
+  const rows = (el, pairs) => { el.innerHTML = pairs.map(([k, v]) => `<div class="row"><span>${k}</span><span>${v}</span></div>`).join(""); };
+
+  const map = L.map("map").setView([16.05, 108.2], 5);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+  let marker = null, accCircle = null, centered = false;
+  const track = L.polyline([], { weight: 3 }).addTo(map);
+
+  function showContract(c) {
+    if (!c) return;
+    $("updated").textContent = new Date(c.timestamp).toLocaleTimeString();
+    const hasFix = c.lat !== null && c.lon !== null;
+    $("fix").textContent = hasFix ? `GPS fix ${c.gps_fix_type}` : "No GPS Fix";
+    $("fix").className = "badge " + (hasFix ? "ok" : "warn");
+    if (hasFix) {  // never move the marker to an invalid/missing position (AC-08)
+      const ll = [c.lat, c.lon];
+      if (!marker) marker = L.circleMarker(ll, { radius: 8, weight: 2, fillOpacity: 0.9 }).addTo(map);
+      marker.setLatLng(ll);
+      track.addLatLng(ll);
+      if (!centered) { map.setView(ll, 17); centered = true; }
+    }
+    rows($("contract"), [
+      ["lat, lon", hasFix ? `${c.lat.toFixed(7)}, ${c.lon.toFixed(7)}` : "null"],
+      ["gps_fix_type", f(c.gps_fix_type, 0)],
+      ["alt_relative_m", f(c.alt_relative_m, 1, " m")],
+      ["ground_speed_ms", f(c.ground_speed_ms, 2, " m/s")],
+      ["heading_deg", f(c.heading_deg, 0, "°")],
+      ["flight_mode / armed", `${f(c.flight_mode)} / ${f(c.armed)}`],
+      ["battery_remaining_pct", f(c.battery_remaining_pct, 0, " %")],
+      ["timestamp", c.timestamp],
+    ]);
+  }
+
+  function showSample(s) {
+    const p = s.position;
+    if (p && accCircle) accCircle.setLatLng([p.lat, p.lon]).setRadius(p.accuracy_m);
+    else if (p) accCircle = L.circle([p.lat, p.lon], { radius: p.accuracy_m, weight: 1, fillOpacity: 0.08 }).addTo(map);
+    const o = s.orientation || {}, a = s.acceleration || {}, r = s.rotation_rate || {};
+    rows($("raw"), [
+      ["seq", s.seq],
+      ["Sai số GPS", p ? f(p.accuracy_m, 1, " m") : "không có fix"],
+      ["Tuổi bản đo GPS", p ? f(p.fix_age_ms / 1000, 1, " s") : "—"],
+      ["Altitude (ellipsoid)", p ? f(p.altitude_m, 1, " m") : "—"],
+      ["La bàn", f(s.compass_heading_deg, 0, "°")],
+      ["Orientation α β γ", `${f(o.alpha, 0)} ${f(o.beta, 0)} ${f(o.gamma, 0)}`],
+      ["Gia tốc x y z", `${f(a.x)} ${f(a.y)} ${f(a.z)} m/s²`],
+      ["Tốc độ quay α β γ", `${f(r.alpha, 0)} ${f(r.beta, 0)} ${f(r.gamma, 0)} °/s`],
+    ]);
+  }
+
+  function showStatus(m) {
+    $("dev").textContent = m.device_id;
+    $("online").textContent = m.online ? "Online" : "Offline";
+    $("online").className = "badge " + (m.online ? "ok" : "bad");
+    const q = m.mqtt || {};
+    rows($("gw"), [
+      ["Điện thoại kết nối", m.sender_connected ? "có" : "không"],
+      ["Mẫu nhận / bị từ chối", `${m.counts.samples} / ${m.counts.rejected}`],
+      ["Đã publish", m.counts.published],
+      ["MQTT", q.enabled ? (q.connected ? "connected" : "disconnected") + ` · acked ${q.acked} · queued ${q.queued} · dropped ${q.dropped}` : "tắt (chỉ lưu local)"],
+      ["Mẫu cuối", m.last_sample_at ? new Date(m.last_sample_at).toLocaleTimeString() : "—"],
+    ]);
+  }
+
+  let retry = 1000;
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/ws?role=viewer&token=${encodeURIComponent(token)}`);
+    ws.onopen = () => { retry = 1000; $("link").textContent = "Live"; $("link").className = "badge ok"; };
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.type === "hello") { $("topic").textContent = m.topic; showStatus(m); showContract(m.latest); }
+      else if (m.type === "status") showStatus(m);
+      else if (m.type === "telemetry") showContract(m.contract);
+      else if (m.type === "sample") showSample(m.sample);
+    };
+    ws.onclose = () => {
+      $("link").textContent = "Mất kết nối, thử lại…"; $("link").className = "badge bad";
+      $("online").textContent = "Không rõ"; $("online").className = "badge warn";
+      setTimeout(connect, retry); retry = Math.min(retry * 2, 10000);
+    };
+  }
+  if (!token) { $("link").textContent = "Thiếu ?token="; $("link").className = "badge bad"; } else connect();
+})();
+</script>
+</body>
+</html>

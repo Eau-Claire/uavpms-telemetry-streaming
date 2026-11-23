@@ -1,0 +1,21 @@
+{
+  "name": "uavpms-phone-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "iPhone (Safari) as a temporary telemetry source for UAV-PMS: WSS in, 22-field MQTT contract out",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "mqtt": "5.10.1",
+    "ws": "8.23.0"
+  },
+  "devDependencies": {
+    "aedes": "0.51.3"
+  }
+}

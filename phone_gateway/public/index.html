@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UAV-PMS Phone Sender</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#14181f; --muted:#5b6472; --line:#e3e6eb; --ok:#13804b; --warn:#a15c00; --bad:#b42318; --accent:#1f5fd6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#181c22; --fg:#e8ebf0; --muted:#98a1ae; --line:#2a3038; --ok:#3fbf7f; --warn:#e0a443; --bad:#f06b5f; --accent:#6c9cff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--fg); padding: 16px max(16px, env(safe-area-inset-left)); }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  button { width:100%; padding:16px; font-size:17px; font-weight:600; border:0; border-radius:12px; background:var(--accent); color:#fff; }
+  button.stop { background: var(--bad); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-top:12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--line); font-size:15px; }
+  .row:last-child { border-bottom:0; }
+  .row span:first-child { color: var(--muted); }
+  .row span:last-child { font-variant-numeric: tabular-nums; text-align:right; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  pre { margin:0; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--muted); }
+  .note { font-size:13px; color:var(--muted); margin-top:12px; line-height:1.45; }
+</style>
+</head>
+<body>
+<main>
+  <h1>UAV-PMS Phone Sender</h1>
+  <div class="sub">Gửi GPS và cảm biến thật của điện thoại về gateway. Giữ Safari mở, không khóa màn hình.</div>
+
+  <button id="toggle">Start Streaming</button>
+
+  <div class="card">
+    <div class="row"><span>Kết nối</span><span id="conn" class="bad">Chưa kết nối</span></div>
+    <div class="row"><span>GPS</span><span id="gps">—</span></div>
+    <div class="row"><span>Độ chính xác</span><span id="acc">—</span></div>
+    <div class="row"><span>Tuổi bản đo GPS</span><span id="age">—</span></div>
+    <div class="row"><span>La bàn</span><span id="compass">—</span></div>
+    <div class="row"><span>Cảm biến chuyển động</span><span id="motion">—</span></div>
+    <div class="row"><span>Đã gửi / server nhận</span><span id="counts">0 / 0</span></div>
+    <div class="row"><span>Giữ màn hình sáng</span><span id="wake">—</span></div>
+  </div>
+
+  <div class="card"><pre id="out">Chưa có mẫu.</pre></div>
+  <p class="note">Dữ liệu là số đo thật từ GPS, la bàn và cảm biến chuyển động của điện thoại. Không có tọa độ nào được sinh ngẫu nhiên.
+    Khi GPS cũ hơn 5 giây hoặc sai số quá lớn, gateway gửi vị trí rỗng thay vì vị trí cũ.</p>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const token = new URLSearchParams(location.search).get("token") || "";
+  const fin = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+  let running = false, ws = null, watchId = null, timer = null, wakeLock = null, retryMs = 1000, retryTimer = null;
+  let seq = 0, sent = 0, acked = 0;
+  let pos = null;             // latest GeolocationPosition, as plain values
+  let compass = null, compassAcc = null, orientation = null, acceleration = null, rotation = null;
+
+  function setConn(text, cls) { const e = $("conn"); e.textContent = text; e.className = cls; }
+
+  function onOrientation(e) {
+    orientation = { alpha: fin(e.alpha), beta: fin(e.beta), gamma: fin(e.gamma) };
+    if (fin(e.webkitCompassHeading) !== null) { compass = e.webkitCompassHeading; compassAcc = fin(e.webkitCompassAccuracy); }
+  }
+  function onMotion(e) {
+    const a = e.acceleration || {}, r = e.rotationRate || {};
+    acceleration = { x: fin(a.x), y: fin(a.y), z: fin(a.z) };
+    rotation = { alpha: fin(r.alpha), beta: fin(r.beta), gamma: fin(r.gamma) };
+  }
+
+  async function keepAwake() {
+    if (!("wakeLock" in navigator)) { $("wake").textContent = "Không hỗ trợ"; return; }
+    try { wakeLock = await navigator.wakeLock.request("screen"); $("wake").textContent = "Bật"; wakeLock.addEventListener("release", () => { $("wake").textContent = "Tắt"; }); }
+    catch (e) { $("wake").textContent = "Không được: " + e.name; }
+  }
+  document.addEventListener("visibilitychange", () => { if (running && document.visibilityState === "visible") { keepAwake(); if (!ws) connect(); } });
+
+  function connect() {
+    clearTimeout(retryTimer);
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws?role=sender&token=${encodeURIComponent(token)}`);
+    setConn("Đang kết nối…", "warn");
+    ws.onopen = () => { retryMs = 1000; setConn("Đã kết nối", "ok"); };
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      if (m.type === "ack") { acked++; $("counts").textContent = `${sent} / ${acked}`; }
+      if (m.type === "error") $("out").textContent = "Server từ chối mẫu: " + m.error;
+    };
+    ws.onclose = (ev) => {
+      ws = null;
+      if (!running) { setConn("Đã dừng", "bad"); return; }
+      if (ev.code === 4000) { setConn("Thiết bị khác đã thay thế kết nối này", "bad"); return; }
+      setConn(`Mất kết nối, thử lại sau ${Math.round(retryMs / 1000)} s`, "bad");
+      retryTimer = setTimeout(connect, retryMs);
+      retryMs = Math.min(retryMs * 2, 10000);
+    };
+  }
+
+  function tick() {
+    const now = Date.now();
+    const p = pos && {
+      lat: pos.lat, lon: pos.lon, accuracy_m: pos.accuracy, altitude_m: pos.altitude,
+      altitude_accuracy_m: pos.altitudeAccuracy, speed_ms: pos.speed, course_deg: pos.heading,
+      fix_time: new Date(pos.timestamp).toISOString(), fix_age_ms: Math.max(0, now - pos.timestamp),
+    };
+    const sample = {
+      type: "sample", seq: seq++, position: p || null,
+      compass_heading_deg: compass, compass_accuracy_deg: compassAcc,
+      orientation, acceleration, rotation_rate: rotation,
+    };
+    if (p) {
+      $("age").textContent = (p.fix_age_ms / 1000).toFixed(1) + " s";
+      $("age").className = p.fix_age_ms > 5000 ? "warn" : "";
+    }
+    $("compass").textContent = compass === null ? "Không có" : compass.toFixed(0) + "°";
+    $("motion").textContent = orientation ? `β ${orientation.beta?.toFixed(0)}° γ ${orientation.gamma?.toFixed(0)}°` : "Không có";
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(sample)); sent++;
+      $("counts").textContent = `${sent} / ${acked}`;
+      $("out").textContent = JSON.stringify(sample, null, 2);
+    }
+  }
+
+  async function start() {
+    if (!token) { alert("Thiếu ?token= trong URL. Dùng link mà gateway in ra."); return; }
+    // Permission prompts must be called directly from the tap, before any other await.
+    const asks = [];
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") asks.push(DeviceOrientationEvent.requestPermission());
+    if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") asks.push(DeviceMotionEvent.requestPermission());
+    const res = await Promise.allSettled(asks);
+    if (res.some((r) => r.status === "rejected" || r.value === "denied")) $("motion").textContent = "Bị từ chối (vẫn gửi GPS)";
+    window.addEventListener("deviceorientation", onOrientation);
+    window.addEventListener("devicemotion", onMotion);
+
+    if (!window.isSecureContext) { alert("Trang phải mở qua HTTPS thì Safari mới cho đọc GPS."); return; }
+    if (!navigator.geolocation) { $("gps").textContent = "Không hỗ trợ"; return; }
+    watchId = navigator.geolocation.watchPosition(
+      (g) => {
+        const c = g.coords;
+        pos = { lat: c.latitude, lon: c.longitude, accuracy: c.accuracy, altitude: fin(c.altitude), altitudeAccuracy: fin(c.altitudeAccuracy), speed: fin(c.speed), heading: fin(c.heading), timestamp: g.timestamp };
+        $("gps").textContent = `${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}`; $("gps").className = "ok";
+        $("acc").textContent = `±${c.accuracy.toFixed(0)} m`; $("acc").className = c.accuracy > 50 ? "warn" : "";
+      },
+      (err) => { $("gps").textContent = "Lỗi: " + err.message; $("gps").className = "bad"; },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 },
+    );
+
+    running = true;
+    $("toggle").textContent = "Stop Streaming"; $("toggle").className = "stop";
+    keepAwake();
+    connect();
+    timer = setInterval(tick, 1000);
+  }
+
+  function stop() {
+    running = false;
+    clearInterval(timer); clearTimeout(retryTimer);
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    window.removeEventListener("deviceorientation", onOrientation);
+    window.removeEventListener("devicemotion", onMotion);
+    if (wakeLock) wakeLock.release();
+    if (ws) ws.close(1000);
+    $("toggle").textContent = "Start Streaming"; $("toggle").className = "";
+    setConn("Đã dừng", "bad");
+  }
+
+  $("toggle").addEventListener("click", () => (running ? stop() : start()));
+})();
+</script>
+</body>
+</html>

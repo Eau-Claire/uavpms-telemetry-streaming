@@ -11,6 +11,9 @@ Every `PUBLISH_INTERVAL_S` (default 2 s) it publishes one JSON message with the 
 `drone/{DRONE_ID}/telemetry`, QoS 1. A message is sent only when new MAVLink data arrived since the last one
 and the autopilot heartbeat is alive.
 
+No drone yet? [phone_gateway](phone_gateway/README.md) streams an iPhone's real GPS and compass through Safari
+and publishes the same 22-field contract on `drone/{id}/telemetry`.
+
 ## Setup
 
 Python 3.11+ (Windows, Linux or macOS). To run on a Raspberry Pi on the drone, see [deploy/raspberry-pi](deploy/raspberry-pi/README.md).

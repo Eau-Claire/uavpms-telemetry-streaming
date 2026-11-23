@@ -1,0 +1,13 @@
+2026-11-23 10:57:46,719 INFO publisher: settings {'drone_id': 'UAV-HCM-01', 'mavlink_connection': 'udpin:127.0.0.1:14550', 'mavlink_baud': 57600, 'mavlink_target_system': 0, 'mavlink_request_streams': True, 'mavlink_stream_rate_hz': 4, 'mqtt_host': 'localhost', 'mqtt_port': 18883, 'mqtt_tls': True, 'mqtt_ca_cert': '<scratch>/certs/ca.crt', 'mqtt_username': 'tester', 'mqtt_password': '***', 'mqtt_client_id': 'uavpms-telemetry-UAV-HCM-01', 'mqtt_qos': 1, 'mqtt_keepalive_s': 30, 'mqtt_max_queued': 150, 'publish_interval_s': 2.0, 'stale_after_s': 5.0, 'heartbeat_timeout_s': 5.0, 'min_gps_fix': 3, 'log_level': 'INFO'}
+2026-11-23 10:57:46,720 INFO publisher.mqtt: connecting to localhost:18883 (tls=True) as uavpms-telemetry-UAV-HCM-01
+2026-11-23 10:57:46,721 INFO publisher: opening MAVLink connection udpin:127.0.0.1:14550
+2026-11-23 10:57:46,779 INFO publisher.mqtt: MQTT connected (Success)
+2026-11-23 10:57:47,712 INFO publisher: requested data streams at 4 Hz from system 1
+2026-11-23 10:57:47,713 INFO publisher: autopilot heartbeat from system 1
+2026-11-23 10:58:01,844 WARNING publisher.mqtt: MQTT disconnected (Unspecified error); reconnecting automatically
+2026-11-23 10:58:08,905 INFO publisher.mqtt: MQTT connected (Success)
+2026-11-23 10:58:16,225 WARNING publisher: no autopilot heartbeat for 5 s: telemetry paused
+2026-11-23 10:58:19,900 INFO publisher: autopilot heartbeat from system 1
+2026-11-23 10:58:38,225 WARNING publisher: no autopilot heartbeat for 5 s: telemetry paused
+2026-11-23 10:58:44,225 INFO publisher: stopping; mqtt={'published': 21, 'acked': 21, 'queue_full': 0, 'errors': 0, 'connects': 2, 'disconnects': 1} {'skipped_no_data': 2, 'skipped_link_lost': 5}
+2026-11-23 10:58:44,226 INFO publisher.mqtt: MQTT disconnected

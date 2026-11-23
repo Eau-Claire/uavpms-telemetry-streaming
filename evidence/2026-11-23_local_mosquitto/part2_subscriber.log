@@ -1,0 +1,15 @@
+connected: Success
+drone/UAV-HCM-01/telemetry qos=1 lat=None lon=None mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=None lon=None mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7770386 lon=106.7055206 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7770338 lon=106.7055754 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7770237 lon=106.7056294 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7770084 lon=106.7056821 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7769879 lon=106.705733 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7769625 lon=106.7057815 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7769326 lon=106.7058272 mode=AUTO bat=99 OK
+drone/UAV-HCM-01/telemetry qos=1 lat=10.7769159 lon=106.7058489 mode=AUTO bat=99 OK
+
+summary:
+  drone/UAV-HCM-01/telemetry: 10 msgs, interval avg 2.67s max 8.00s
+  invalid: 0/10

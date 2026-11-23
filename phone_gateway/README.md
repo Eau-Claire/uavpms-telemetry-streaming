@@ -36,7 +36,10 @@ cloudflared prints `https://<random>.trycloudflare.com`. Then:
 Safari allows GPS and motion sensors only on HTTPS. The tunnel provides HTTPS, so no certificate setup is
 needed. A plain `http://192.168.x.x:3000` URL will not work on the iPhone.
 
-If `MQTT_HOST` is empty, the gateway runs without MQTT. It still writes the history file and serves the dashboard.
+MQTT settings are read from `phone_gateway/.env` first, then from the repo's `.env` (the MAVLink publisher's file),
+so on a Pi that already runs the publisher nothing needs to be copied. Empty values do not hide the next file.
+The gateway uses its own MQTT client id, so it does not disconnect the publisher. With no `MQTT_HOST` anywhere,
+or `PHONE_MQTT=off`, it runs without MQTT and still writes the history file and serves the dashboard.
 
 ## How the phone data maps to the contract
 
@@ -74,7 +77,7 @@ attitude only for a known mounting and axis convention.
 ## Tests
 
 ```bash
-npm test     # 9 tests: adapter mapping + end-to-end WebSocket -> gateway -> MQTT broker (in-process) -> subscriber
+npm test     # 11 tests: config loading, adapter mapping + end-to-end WebSocket -> gateway -> MQTT broker (in-process) -> subscriber
 ```
 
 The output was also checked with the repo's own validator. The gateway ran with `npm start`, connected to a

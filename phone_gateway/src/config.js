@@ -1,15 +1,20 @@
 // Settings come from the environment. phone_gateway/.env is loaded first, then the repo's .env, so the
-// MQTT_* values already set up for the MAVLink publisher are reused. Existing variables are never overridden.
+// MQTT_* values already set up for the MAVLink publisher are reused. A variable that already has a non-empty
+// value is never overridden, and an empty line such as `MQTT_HOST=` does not hide the value in the next file.
 import fs from "node:fs";
 import path from "node:path";
+import util from "node:util";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ID_RE = /^[A-Za-z0-9_.-]{1,64}$/; // same rule as the publisher: no MQTT wildcards or '/'
 
-export function loadEnvFiles() {
-  for (const f of [path.join(here, "..", ".env"), path.join(here, "..", "..", ".env")]) {
-    if (fs.existsSync(f)) process.loadEnvFile(f);
+export function loadEnvFiles(files = [path.join(here, "..", ".env"), path.join(here, "..", "..", ".env")], env = process.env) {
+  for (const f of files) {
+    if (!fs.existsSync(f)) continue;
+    for (const [k, v] of Object.entries(util.parseEnv(fs.readFileSync(f, "utf8")))) {
+      if (v !== "" && !env[k]) env[k] = v;
+    }
   }
 }
 
@@ -34,7 +39,7 @@ export function readConfig(env = process.env) {
   if (!ID_RE.test(deviceId)) throw new ConfigError(`PHONE_DEVICE_ID=${deviceId} may only use letters, digits, '_', '.', '-'`);
   const token = env.PHONE_ACCESS_TOKEN || "";
   if (token.length < 16) throw new ConfigError("PHONE_ACCESS_TOKEN must be set (at least 16 characters); the tunnel URL is public");
-  const mqttHost = env.MQTT_HOST || "";
+  const mqttHost = bool(env, "PHONE_MQTT", true) ? env.MQTT_HOST || "" : "";
   return {
     deviceId,
     token,
